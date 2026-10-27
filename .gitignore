@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+
+# 构建产物
+www/
+build/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+
+# 图标源文件与临时目录
+.edge-tmp/
+.icon-src/
+
+# 签名文件（绝不要提交）
+*.keystore
+*.jks
+*.b64
+
+# 系统
+.DS_Store
+Thumbs.db
