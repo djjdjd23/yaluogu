@@ -26,8 +26,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 配置 Android SDK
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest 自带 Android SDK，无需第三方 action
+      - name: 检查并补齐 Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "已装 platforms:"; ls "$ANDROID_HOME/platforms" 2>/dev/null || true
+          echo "已装 build-tools:"; ls "$ANDROID_HOME/build-tools" 2>/dev/null || true
+
+          SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "找不到 sdkmanager，跳过补齐"; exit 0
+          fi
+          if [ ! -d "$ANDROID_HOME/platforms/android-34" ]; then
+            echo "补齐 platforms;android-34"
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+          fi
 
       - name: 安装依赖
         run: npm ci
