@@ -1,0 +1,100 @@
+name: 构建 APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 打包 Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 生成 web 产物并同步到 Android 工程
+        run: |
+          npm run build:web
+          npx cap sync android
+
+      - name: 准备签名文件
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          KS="$RUNNER_TEMP/release.keystore"
+          ALIAS="${KS_ALIAS:-yaluogu}"
+
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$KS"
+            echo "使用仓库 Secrets 中配置的签名文件"
+            echo "source=secrets" >> "$GITHUB_OUTPUT"
+          else
+            keytool -genkeypair -v -keystore "$KS" -alias "$ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass yaluogu2026 -keypass yaluogu2026 \
+              -dname "CN=Yaluogu, OU=Game, O=Yaluogu, L=Beijing, ST=Beijing, C=CN"
+            base64 -w0 "$KS" > "$RUNNER_TEMP/yaluogu-keystore.b64"
+            echo "source=generated" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置签名密钥，本次使用临时生成的 keystore。请下载 keystore-backup 产物并配置到 Secrets，否则下个版本签名不同，TapTap 无法覆盖更新。"
+          fi
+
+          echo "ANDROID_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=${KS_STORE_PASS:-yaluogu2026}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=${KS_KEY_PASS:-yaluogu2026}" >> "$GITHUB_ENV"
+
+      - name: 编译 Release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: 整理产物
+        run: |
+          mkdir -p dist
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "没有找到 APK"; exit 1
+          fi
+          cp "$APK" "dist/鸦落谷-v1.0.apk"
+          ls -lh dist/
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaluogu-apk
+          path: dist/*.apk
+          retention-days: 90
+
+      - name: 上传签名备份（仅首次临时生成时）
+        if: steps.keystore.outputs.source == 'generated'
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore-backup
+          path: ${{ runner.temp }}/yaluogu-keystore.b64
+          retention-days: 90
