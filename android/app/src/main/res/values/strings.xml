@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">鸦落谷</string>
-    <string name="title_activity_main">鸦落谷</string>
+    <string name="app_name">鸦落谷：拓荒领主</string>
+    <string name="title_activity_main">鸦落谷：拓荒领主</string>
     <string name="package_name">cn.yaluogu.taptap</string>
     <string name="custom_url_scheme">cn.yaluogu.taptap</string>
 </resources>
